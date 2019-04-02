@@ -19,36 +19,54 @@
 #include "ring.h"
 #include "CUnit/Basic.h"
 
-#define RING_LEN 4
-#define NUM_ITERATIONS 10 
+#define MAX_NUM_RINGS 3 
+#define NUM_ITERATIONS 3
+#define ASCII_START_NUM 65
+
+ring_t *ring[MAX_NUM_RINGS];
+int ring_length[MAX_NUM_RINGS] = {256, 4, 1};
+
+void transmit(ring_t *ring)
+{
+
+    for (int i = 0; i < NUM_ITERATIONS; i++)
+    {
+        // Insert data.
+        insert(ring, ASCII_START_NUM + i);
+        printf("Num entries at iteration=%d are: %d\n", i, entries(ring));
+        show(ring);
+    }
+}
+
+void receive(ring_t *ring)
+{
+    for (int i = 0; i < NUM_ITERATIONS; i++)
+    {
+        char c;
+        my_remove(ring, &c);
+        printf("Num entries at iteration=%d are: %d\n", i, entries(ring));
+        show(ring);
+    }
+}
 
 int main(void)
 {
-    // Initialize ring.
-    ring_t *ring = init(RING_LEN);
-
-    // Mimic transmit and receive by inserting and removing data.
-    for (int i = 0; i < NUM_ITERATIONS; i++)
+    for (int i = 0; i < MAX_NUM_RINGS; i++)
     {
-        printf("-------- At iteration=%d --------\n", i);
-        // Insert data.
-        insert(ring, 65 + i);
+        printf("------- For ring=%d with size=%d -------\n", i, ring_length[i]);
 
-        show(ring);
+        // Initialize ring.
+        ring[i] = init(ring_length[i]);
 
-        // Remove data.
-        if ((i > 4 && i < 8))
-        {
-            char c;
-            my_remove(ring, &c);
-            printf("main(): Removed char=%c\n", c);
+        // Transmit data.
+        transmit(ring[i]);
 
-            my_remove(ring, &c);
-            printf("main(): Removed char=%c\n", c);
-        }
+        // Receive data (i.e. remove data).
+        receive(ring[i]);
+
+        // Clean ring.
+        clean(ring[i]);
     }
-
-    clean(ring);
 
     return (EXIT_SUCCESS);
 }

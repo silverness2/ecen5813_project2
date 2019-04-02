@@ -82,9 +82,14 @@ int insert(ring_t *ring, char data)
     {
         ring->Buffer[ring->Ini++ & ring->Adj_Len] = data;
 
-        printf("insert(): Inserted char=%c, Ini now=%d\n", data, ring->Ini);
+        printf("insert(): Inserted char=%c, Ini=%d\n", data, ring->Ini);
         return 1;
     }
+    else
+    {
+        printf("insert(): ERROR: Cannot insert. Buffer is full.\n");
+    }
+
     return 0;
 }
 
@@ -98,9 +103,14 @@ int my_remove(ring_t *ring, char *data)
     if (ring->Outi != ring->Ini)
     {
         *data = ring->Buffer[ring->Outi++ & ring->Adj_Len];
-        printf("my_remove(): Removed char=%c, Outi now=%d\n", *data, ring->Outi);
+        printf("my_remove(): Removed char=%c, Outi=%d\n", *data, ring->Outi);
         return 1;
     }
+    else
+    {
+        printf("my_remove(): ERROR: Cannot remove. Buffer is empty.\n");
+    }
+
     return 0;
 }
 

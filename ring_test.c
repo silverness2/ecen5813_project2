@@ -20,20 +20,25 @@
 #include "ring.h"
 #include "CUnit/Basic.h"
 
-#define RING_LEN 4
-#define NUM_ITERATIONS 10 
+#define RING_LEN 4 // test suite 1
+#define MAX_NUM_RINGS 2  // test suite 2
 
-ring_t *ring;
+// Global variables.
+ring_t *ring; // test suite 1
+ring_t *rings[MAX_NUM_RINGS]; // test suite 2
+int ring_length[MAX_NUM_RINGS] = {4, 2}; // test suite 2
+
+// TEST SUITE 1
 
 // Return 0 on success, non-zero otherwise.
-int init_suite()
+int init_suite_1()
 {
     ring = init(RING_LEN);
     return 0;
 }
 
 // Return 0 on success, non-zero otherwise.
-int clean_suite()
+int clean_suite_1()
 {
     clean(ring);
     return 0;
@@ -120,6 +125,66 @@ void testREMOVE_FROM_EMPTY_BUFF(void)
     CU_ASSERT(0 == my_remove(ring, &c));
 }
 
+// TEST SUITE 2
+// Return 0 on success, non-zero otherwise.
+int init_suite_2()
+{
+    rings[0] = init(ring_length[0]);
+    rings[1] = init(ring_length[1]);
+    return 0;
+}
+
+// Return 0 on success, non-zero otherwise.
+int clean_suite_2()
+{
+    clean(rings[0]);
+    clean(rings[1]);
+    return 0;
+}
+
+/* Test that multiple ring buffers can be initialized and used with the same
+   functions. */
+void testMULTIPLE_BUFFS_INSERT(void)
+{
+    CU_ASSERT(1 == insert(rings[0], 'A'));
+    CU_ASSERT(1 == insert(rings[0], 'B'));
+    CU_ASSERT(2 == entries(rings[0]));
+    CU_ASSERT(1 == insert(rings[0], 'C'));
+    CU_ASSERT(1 == insert(rings[0], 'D'));
+    CU_ASSERT(4 == entries(rings[0]));
+
+    CU_ASSERT(1 == insert(rings[1], '1'));
+    CU_ASSERT(1 == insert(rings[1], '2'));
+    CU_ASSERT(2 == entries(rings[1]));
+    CU_ASSERT(0 == insert(rings[1], '3'));
+    CU_ASSERT(0 == insert(rings[1], '4'));
+    CU_ASSERT(2 == entries(rings[1]));
+}
+
+void testMULTIPLE_BUFFS_REMOVE(void)
+{
+    char c;
+    CU_ASSERT(1 == my_remove(rings[0], &c));
+    CU_ASSERT(1 == (c == 'A'))
+    CU_ASSERT(3 == entries(rings[0]));
+    CU_ASSERT(1 == my_remove(rings[0], &c));
+    CU_ASSERT(1 == (c == 'B'))
+    CU_ASSERT(1 == my_remove(rings[0], &c));
+    CU_ASSERT(1 == (c == 'C'))
+    CU_ASSERT(1 == my_remove(rings[0], &c));
+    CU_ASSERT(1 == (c == 'D'))
+    CU_ASSERT(0 == entries(rings[0]));
+
+    CU_ASSERT(1 == my_remove(rings[1], &c));
+    CU_ASSERT(1 == (c == '1'))
+    CU_ASSERT(1 == entries(rings[1]));
+    CU_ASSERT(1 == my_remove(rings[1], &c));
+    CU_ASSERT(1 == (c == '2'))
+    CU_ASSERT(0 == my_remove(rings[1], &c));
+    CU_ASSERT(0 == my_remove(rings[1], &c));
+    CU_ASSERT(0 == entries(rings[1]));
+}
+
 int main(void)
 {
     // Initialize the CUnit test registry.
@@ -130,7 +195,10 @@ int main(void)
 
     // Add a suite to the registry.
     CU_pSuite pSuite = NULL;
-    pSuite = CU_add_suite("Ring Buffer Suite", init_suite, clean_suite);
+    pSuite = CU_add_suite("Single Ring Buffer, Suite 1", init_suite_1, \
+                          clean_suite_1);
+    pSuite = CU_add_suite("Multiple Ring Buffers, Suite 2", init_suite_2, \
+                          clean_suite_2);
     if (NULL == pSuite)
     {
         CU_cleanup_registry();
@@ -144,8 +212,12 @@ int main(void)
                                             testINSERT_AND_REMOVE)) ||
         (NULL == CU_add_test(pSuite, "test of insert into full buffer",  \
                                         testINSERT_INTO_FULL_BUFF)) ||
-        (NULL == CU_add_test(pSuite, "test of remove from empty buffer", \
-                                      testREMOVE_FROM_EMPTY_BUFF)))
+        (NULL == CU_add_test(pSuite, "test of remove from empty buffer",
+                                      testREMOVE_FROM_EMPTY_BUFF)) ||
+        (NULL == CU_add_test(pSuite, "test of insert to mult buffers", \
+                                      testMULTIPLE_BUFFS_INSERT)) ||
+        (NULL == CU_add_test(pSuite, "test of remove from mult buffers", \
+                                      testMULTIPLE_BUFFS_REMOVE)))
     {
         CU_cleanup_registry();
         return CU_get_error();
@@ -157,48 +229,3 @@ int main(void)
     CU_cleanup_registry();
     return CU_get_error();
 }
-
-///////////////////////////////////////////////////
-// Example code for main without testing framework.
-/*
-
-#include <stdio.h>
-#include <stdlib.h>
-#include "ring.h"
-#include "CUnit/Basic.h"
-
-#define RING_LEN 4
-#define NUM_ITERATIONS 10 
-
-int main(void)
-{
-    // Initialize ring.
-    ring_t *ring = init(RING_LEN);
-
-    // Mimic transmit and receive by inserting and removing data.
-    for (int i = 0; i < NUM_ITERATIONS; i++)
-    {
-        printf("-------- At iteration=%d --------\n", i);
-        // Insert data.
-        insert(ring, 65 + i);
-
-        show(ring);
-
-        // Remove data.
-        if ((i > 4 && i < 8))
-        {
-            char c;
-            my_remove(ring, &c);
-            printf("main(): Removed char=%c\n", c);
-
-            my_remove(ring, &c);
-            printf("main(): Removed char=%c\n", c);
-        }
-    }
-
-    clean(ring);
-
-    return (EXIT_SUCCESS);
-}
-*/
-//////////////////////////
