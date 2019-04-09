@@ -16,9 +16,11 @@ int uart_init()
     // Turn off UART0 before making configuration changes.
     UART0->C2 = 0; // clear the C2 register (this includes disabling Tx & Rx)
 
-    // Set baud rate for UART0. Baud Rate = Clock Source / (OSR + 1) * SBR
+    // Set baud rate for UART0. Baud Rate = Clock Source / ((OSR + 1) * SBR)
     // SBR = concat of UART0_BDH and UART0_BDL
-    // * Confused about this!
+    // SBR of 0x17 (dec = 23) corresponds to baud rate of 115,200
+    // baud rate = 48 MHz / ((15 + 1) * 23) = 130434.78 = 130,434 bits/sec
+    // TODO: Confused about this!
     UART0->BDH = 0x00;
     UART0->BDL = 0x17; // SBR of 0x17 corresponds to baud rate of 115,200
 
