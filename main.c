@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ring.h"
-#include "CUnit/Basic.h"
 
 #define MAX_NUM_RINGS 3 
 #define NUM_ITERATIONS 3
