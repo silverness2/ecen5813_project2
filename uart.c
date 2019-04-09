@@ -14,7 +14,7 @@ int uart_init()
     SIM->SOPT2 |= SIM_SOPT2_PLLFLLSEL_MASK; // set bit 16 to 0 to select FLL
 
     // Turn off UART0 before making configuration changes.
-    UART0->C2 = 0; // clear the C2 register
+    UART0->C2 = 0; // clear the C2 register (this includes disabling Tx & Rx)
 
     // Set baud rate for UART0. Baud Rate = Clock Source / (OSR + 1) * SBR
     // SBR = concat of UART0_BDH and UART0_BDL
@@ -23,7 +23,6 @@ int uart_init()
     UART0->BDL = 0x17; // SBR of 0x17 corresponds to baud rate of 115,200
 
     // Set Over Sampling Ratio value to 16 (0x0F) for receiver.
-    // * Should only be changed when transmitter and receiver are both disabled.
     UART0->C4 = 0x0F;
 
     // Set control register flags:
@@ -42,7 +41,7 @@ int uart_init()
     // Select alt func 2 (ALT2) (bits 10-8: MUX = 010) for PA2 (UART0_Tx) pins.
     PORTA->PCR[2] |= 0x0200;
 
-    // Select alt func 2 (ALT2) (bits 10-8: MUX = 010) for PA1 (UART0_Tx) pins.
+    // Select alt func 2 (ALT2) (bits 10-8: MUX = 010) for PA1 (UART0_Rx) pins.
     PORTA->PCR[1] |= 0x0200;
 }
 
