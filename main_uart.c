@@ -9,7 +9,7 @@ int main()
 
     while (1)
     {
-        uart_transmit_blocking("H");
+        uart_transmit_blocking('H');
         char c = uart_receive_blocking();
     }
 
