@@ -3,19 +3,6 @@ LDFLAGS = -lm
 UNIT_LDFLAGS = -lcunit
 TARGET = main
 TEST = unit_test
-UART_TARGET = main_uart
-
-
-# MAIN FOR UART
-
-$(UART_TARGET): $(UART_TARGET).o uart.o
-	gcc -o $(UART_TARGET) $(UART_TARGET).o ring.o $(LDFLAGS)
-
-uart.o: uart.c uart.h
-	gcc $(CFLAGS) -c uart.c -o uart.o
-
-
-# UNIT TEST AND MAIN FOR RING BUFFER
 
 $(TEST): ring_test.o ring.o
 	gcc -o $(TEST) ring_test.o ring.o $(LDFLAGS) $(UNIT_LDFLAGS)
