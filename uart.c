@@ -4,7 +4,6 @@
 
 /*
 NOTES:
-From tutorial:
 "We monitor poll) the TC flag bit to make sure that all the bits of the
 last byte are transmitted. By the same logic, we monitor (poll) the RDRF
 flag to see if a byte of data is received. The transmitter is double buffered.
@@ -18,7 +17,31 @@ TCIE (Transmission Complete Interrupt Enable) = bit 6 in UART0_C2.
 Used for interrupt-driven UART.
 TCIE 0 = TC Interrupt Request is disabled.
 TCIE 1 = TC Interrupt Request is enabled.
+
+Enable the transmitter bit for interrupt-driven UART, TIE (Transmitter Full
+Interrupt Enable) (mask = 0x80 = bit 7 of UART0_C2 = TIE).
+
+Transmit Interrupt Enable for TDRE
+TIE 0 - TDRE interrupt requests disabled (i.e. use polling).
+TIE 1 - TDRE interrupt request enabled
+
+TDRE (Transmit Data Register Empty) (set in UART_S1).
+TDRE 0: Shift register is loaded and shifting. An additional byte is waiting
+in the data register.
+TDRE 1: Data register empty and ready for next byte.
 */
+
+//#define SIMPLE_ECHO_TEST
+//#define ECHO_TEST
+#define PRINT_TABLE
+
+void init_ascii_table()
+{
+    for (int i = 0; i < NUM_SYMBOLS; i++)
+    {
+    	ascii[i] = 0;
+    }
+}
 
 void uart_init_buff()
 {
@@ -103,19 +126,6 @@ void uart_init_interrupt()
 	// RDRF 1 = Data available in UART data register and ready to be picked up.
     UART0->C2 |= UART0_C2_RIE(1);
 
-    // Enable the transmitter bit for interrupt-driven UART, TIE (Transmitter Full
-    // Interrupt Enable) (mask = 0x80 = bit 7 of UART0_C2 = TIE).
-    //
-    // Transmit Interrupt Enable for TDRE
-    // TIE 0 - TDRE interrupt requests disabled (i.e. use polling).
-    // TIE 1 - TDRE interrupt request enabled.
-    //
-    // TDRE (Transmit Data Register Empty) (set in UART_S1).
-    // TDRE 0: Shift register is loaded	and	shifting. An additional byte is waiting
-    // in the data register.
-    // TDRE 1: Data register empty and ready for next byte.
-//    UART0->C2 |= UART0_C2_TIE(1);
-
     // First disable/clear the interrupt for UART0 = IRQ #12 = bit 12 of ICER[0]
     // = 0x1000.
     NVIC_DisableIRQ(UART0_IRQn);
@@ -193,47 +203,168 @@ char uart_receive_blocking()
     return uart_receive();
 }
 
+void populate_tx_table_ring(char c)
+{
+	// Increment count for char tc.
+	ascii[(int)c]++;
+
+	// Insert table title into tx ring.
+	const char *p = table_title;
+	while (*p != '\0')
+	{
+		insert(ring_tx, *p);
+		p++;
+	}
+
+	// Insert chars that have a count > 0 into tx ring.
+	for (int i = 0; i < NUM_SYMBOLS; i++)
+	{
+		if (ascii[i] != 0)
+		{
+			// Get the char string representation of the ascii[i] integer value.
+			// For ex: If the number of 'a' chars received is 12, we want to transmit
+			// the value 12. So, using sprintf to convert the dec = 12 value to a char
+			// string, and then inserting the chars '1' and '2' into the buffer.
+			char count_as_char[MAX_COUNT_DIGITS + 1]; // +1 for '\0' char
+			int num_digits = sprintf(count_as_char, "%d", ascii[i]);
+
+			// Each line is in the format: char - #
+			// Ex. b - 3
+            insert(ring_tx, (char)i); // the char from uart
+            insert(ring_tx, ' ');     // a space
+            insert(ring_tx, '-');     // a dash
+            insert(ring_tx, ' ');     // a space
+            for (int j = 0; j < num_digits; j++) // the char's count
+            {
+                insert(ring_tx, count_as_char[j]);
+            }
+            insert(ring_tx, '\r'); //
+            insert(ring_tx, '\n');
+		}
+	}
+}
+
 void UART0_IRQHandler(void)
 {
     NVIC_DisableIRQ(UART0_IRQn);
 
+#ifdef SIMPLE_ECHO_TEST
     // Device receive char from host uart.
     if (uart_can_receive())
     {
-    	// Get char from device uart.
-        char c = uart_receive();
+        // Get char from device uart.
+    	char c = uart_receive();
 
-        // Insert char into app ring.
-        insert(ring_rx, c);
-
+    	// Insert char into app ring.
+    	insert(ring_rx, c);
     }
+
     // Device transmit char to host uart.
     if (uart_can_transmit())
     {
-    	if (entries(ring_rx) > 0)
+        if (entries(ring_rx) > 0)
     	{
-    		// Remove char from app ring.
+    		// Remove char from rx ring.
     		char c;
             my_remove(ring_rx, &c);
-
-            // Do an LED test to make sure we are OK up to this point.
-            // Turns light on if any letter except a,b,c,d is typed.
-            /*if ((int)c > 100) { set_led_blue_on(); }
-            else { set_led_blue_off(); }
-            // Add a delay so enough time spent in handler, otherwise an echo to fast.
-            delay(2000);*/
-
-            // Trigger a transmit interrupt.
-            //UART0->C2 |= UART0_C2_TIE(1);
 
             // Transmit char to host uart.
             uart_transmit(c);
 
-            // Clear the transmitter interrupt status so system does not remain
-            // in constant state of interrupt.
-            //UART0->C2 &= ~UART0_C2_TIE(1); // mask = 0x800 = bit 11*/
+        } // end if entries > 0
+    } // end if uart can transmit
+#endif
+
+#ifdef ECHO_TEST
+
+    // Device receive char from host uart.
+    if (uart_can_receive())
+    {
+        // Get char from device uart.
+    	char rc = uart_receive();
+
+    	// Insert char into rx ring.
+    	insert(ring_rx, rc);
+
+        if (entries(ring_rx) > 0)
+    	{
+    		// Remove a char from rx ring.
+    		char tc;
+            my_remove(ring_rx, &tc);
+
+        	// Add that char to tx ring.
+            insert(ring_tx, tc);
+
+            // Enable transmit interrupts.
+            // TODO: Need to do a check here to see if ok to enable?
+            UART0->C2 |= UART0_C2_TIE(1);
     	}
     }
+    // Device transmit char to host uart.
+    else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
+    {
+        while (uart_can_transmit() && entries(ring_tx) > 0)
+    	{
+    		// Remove char from tx ring.
+    		char tc;
+            my_remove(ring_tx, &tc);
 
+            // Transmit char to host uart.
+            uart_transmit(tc);
+        }
+
+        // Disable transmit interrupts so not constantly entering the interrupt handler.
+        UART0->C2 &= ~UART_C2_TIE(1);
+    }
+#endif
+
+#ifdef PRINT_TABLE_WITH_TIE
+
+    // Device receive char from host uart.
+    if (uart_can_receive())
+    {
+        // Get char from device uart.
+    	char rc = uart_receive();
+
+    	// Insert char into rx ring.
+    	insert(ring_rx, rc);
+
+        if (entries(ring_rx) > 0)
+    	{
+    		// Remove a char from rx ring.
+    		char tc;
+            int ret = my_remove(ring_rx, &tc);
+
+        	if (ret)
+            {
+            	// Add char to tx ring. Tx ring is formatted as a table.
+            	populate_tx_table_ring(tc);
+            }
+
+            // Enable transmit interrupts.
+            // TODO: Need to do a check here to see if ok to enable?
+            UART0->C2 |= UART0_C2_TIE(1);
+    	}
+    }
+    // Device transmit char to host uart.
+    else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
+    {
+        // Transmit tx ring table to host UART from device UART.
+        while (entries(ring_tx) > 0)
+        {
+            // Remove char from the tx ring.
+            char tx_c;
+            int ret = my_remove(ring_tx, &tx_c);
+            if (ret && uart_can_transmit())
+            {
+                uart_transmit(tx_c);
+            }
+        }
+
+        // Disable transmit interrupts so not constantly entering the interrupt handler.
+        UART0->C2 &= ~UART_C2_TIE(1);
+    }
+#endif
     NVIC_EnableIRQ(UART0_IRQn);
 }
+
