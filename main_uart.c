@@ -2,9 +2,15 @@
  * @file    test1-project2.c
  * @brief   Application entry point.
  * 
- *ATTRIBUTIONS: BOARD_Initx functions taken from Copyright 2016-2018 NXP.
+ * ATTRIBUTIONS:
+ * KL25 Sub-Family Reference Manual by NXP.
+ * Freescale ARM Cortex-M Embedded Programming by Muhammad Ali Mazidi et al.
  */
 
+/**
+ * @file    test1-project2.c
+ * @brief   Application entry point.
+ */
 #include <stdio.h>
 #include "board.h"
 #include "peripherals.h"
@@ -13,10 +19,12 @@
 #include "MKL25Z4.h"
 #include "fsl_debug_console.h"
 #include "uart.h"
+#include "led.h"
 
+#define TEST_LED
 //#define USE_BLOCKING
 //#define USE_INTERRUPT
-#define USE_BLOCKING_WITH_APP
+//#define USE_BLOCKING_WITH_APP
 
 /*
  * @brief   Application entry point.
@@ -30,7 +38,21 @@ int main(void) {
     /* Init FSL debug console. */
     BOARD_InitDebugConsole();
 
-    #ifdef USE_BLOCKING_WITH_APP
+#ifdef TEST_LED
+    // Initialize blue led.
+    led_blue_init();
+
+    // Toggle blue led.
+    while (1)
+    {
+        set_led_blue_on();
+        delay(500);
+        set_led_blue_off();
+        delay(500);
+    }
+#endif
+
+#ifdef USE_BLOCKING_WITH_APP
     // Initialize UART hardware.
     uart_init();
 
@@ -70,8 +92,8 @@ int main(void) {
         // UART on device transmits char back to UART on host.
         if (ret)
         {
-            // Remove char from the rx ring.
-            ret = my_remove(ring_rx, &tc);
+        	// Remove char from the rx ring.
+        	ret = my_remove(ring_rx, &tc);
             if (ret)
             {
             	// Increment count for char tc.
@@ -81,17 +103,17 @@ int main(void) {
             	const char *p = table_title;
             	while (*p != '\0')
             	{
-            	    insert(ring_tx, *p);
-                    p++;
+            		insert(ring_tx, *p);
+            		p++;
             	}
 
             	// Insert chars that have a count > 0 into tx ring.
             	for (int i = 0; i < NUM_SYMBOLS; i++)
             	{
-            	    if (ascii[i] != 0)
-            	    {
-            		char count_as_char[MAX_COUNT_DIGITS + 1];
-           		int num_digits = sprintf(count_as_char, "%d", ascii[i]);
+            		if (ascii[i] != 0)
+            		{
+            			char count_as_char[MAX_COUNT_DIGITS + 1];
+            			int num_digits = sprintf(count_as_char, "%d", ascii[i]);
 
                         insert(ring_tx, (char)i);
                         insert(ring_tx, ' ');
@@ -109,9 +131,9 @@ int main(void) {
             	// Print the table to host UART by transmitting from device UART.
             	while (entries(ring_tx) > 0)
             	{
-                    // Remove char from the tx ring.
-            	    char tx_c;
-                    ret = my_remove(ring_tx, &tx_c);
+                	// Remove char from the tx ring.
+            		char tx_c;
+                	ret = my_remove(ring_tx, &tx_c);
                     if (ret)
                     {
                     	uart_transmit(tx_c);
@@ -156,5 +178,5 @@ int main(void) {
     while (1) {}
 #endif
 
-    return 0 ;
+    return 0;
 }
