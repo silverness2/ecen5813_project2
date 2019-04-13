@@ -21,21 +21,23 @@
 #include "uart.h"
 #include "led.h"
 
-#define TEST_LED
+//#define TEST_LED
 //#define USE_BLOCKING
-//#define USE_INTERRUPT
+#define USE_INTERRUPT
 //#define USE_BLOCKING_WITH_APP
+
+#define DELAY_MS 500
 
 /*
  * @brief   Application entry point.
  */
 int main(void) {
 
-    /* Init board hardware. */
+  	/* Init board hardware. */
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitBootPeripherals();
-    /* Init FSL debug console. */
+  	/* Init FSL debug console. */
     BOARD_InitDebugConsole();
 
 #ifdef TEST_LED
@@ -46,9 +48,9 @@ int main(void) {
     while (1)
     {
         set_led_blue_on();
-        delay(500);
+        delay(DELAY_MS);
         set_led_blue_off();
-        delay(500);
+        delay(DELAY_MS);
     }
 #endif
 
@@ -171,12 +173,23 @@ int main(void) {
     // Initialize UART hardware interrupts.
     uart_init_interrupt();
 
+    // Initialize blue led.
+    led_blue_init();
+
     // Enable interrupts (IRQs) globally for setup.
     __enable_irq();
 
     // Run forever while interrupts get called.
-    while (1) {}
+    while (1)
+    {
+        // Toggle an led when not in interrupt code.
+    	set_led_blue_on();
+        delay(DELAY_MS);
+        set_led_blue_off();
+        delay(DELAY_MS);
+    }
 #endif
 
     return 0;
 }
+

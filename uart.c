@@ -1,13 +1,32 @@
 #include "uart.h"
+#include "led.h"
 #include "MKL25Z4.h"
+
+/*
+NOTES:
+From tutorial:
+"We monitor poll) the TC flag bit to make sure that all the bits of the
+last byte are transmitted. By the same logic, we monitor (poll) the RDRF
+flag to see if a byte of data is received. The transmitter is double buffered.
+While the shift register is shifting the last byte out, the program may
+write another byte of data to the Data Register to wait for the shift
+register to be ready. The transfer of data between the data register and
+the shift register is automatic and the program does not have to worry
+about it."
+
+TCIE (Transmission Complete Interrupt Enable) = bit 6 in UART0_C2.
+Used for interrupt-driven UART.
+TCIE 0 = TC Interrupt Request is disabled.
+TCIE 1 = TC Interrupt Request is enabled.
+*/
 
 void uart_init_buff()
 {
     // Initialize ring buffer for receiving chars from host UART.
-    ring_tx = init(RING_BUFF_LEN);
+    ring_rx = init(RING_BUFF_LEN);
 
     // Initialize ring buffer for transmitting chars from device UART.
-    ring_rx = init(RING_BUFF_LEN);
+    ring_tx = init(RING_BUFF_LEN);
 }
 
 void uart_init()
@@ -44,18 +63,18 @@ void uart_init()
     UART0->BDL = UART0_BDL_SBR(3);
 
     // Set Over Sampling Ratio value to 16 (0x0F) for receiver.
-    UART0->C4 |= (0x0F);// & UART0_C4_OSR_MASK);
+    UART0->C4 |= (0x0F);
 
     // Set control register flags:
     // No parity (bit 1), 8-bit data size and 1 stop bit (bit 4)
     UART0->C1 = 0x00;
 
     // Enable the transmitter for UART0, TE (Transmit Enable)
-    //UART0->C2 |= UART0_C2_TE_MASK; // mask = 0x8 = bit 4 is for TE
+    // Same as: UART0->C2 |= UART0_C2_TE_MASK; // mask = 0x8 = bit 4 is for TE
     UART0->C2 |= UART0_C2_TE(1);
 
     // Enable the receiver for UART0, RE (Receive Enable).
-    //UART0->C2 |= UART0_C2_RE_MASK; // mask = 0x4 = bit 3 is for RE
+    // Same as: UART0->C2 |= UART0_C2_RE_MASK; // mask = 0x4 = bit 3 is for RE
     UART0->C2 |= UART_C2_RE(1);
 }
 
@@ -74,21 +93,34 @@ void uart_init_interrupt()
     */
 
     // Enable the receiver bit for interrupt-driven UART, RIE (Receiver Full
-    // Interrupt Enable). (mask = 0x20 = bit 5 RIE)
+    // Interrupt Enable) (mask = 0x20 = bit 5 of UART0_C2 = RIE).
+	//
+	// RIE 0 = RDRF	Interrupt Request is disabled.
+	// RIE 1 = RDRF	Interrupt Request is enabled.
+	//
+	// RDRF (Receive Data Register Full flag (set in UART0_S1).
+	// RDRF 0 = No data available in UART data register.
+	// RDRF 1 = Data available in UART data register and ready to be picked up.
     UART0->C2 |= UART0_C2_RIE(1);
 
-    // Enable the transmitter bit for interrupt-driven UART, TIE (Transmitter
-    // Interrupt Enable). (mask = 0xxx = bit x TIE)
+    // Enable the transmitter bit for interrupt-driven UART, TIE (Transmitter Full
+    // Interrupt Enable) (mask = 0x80 = bit 7 of UART0_C2 = TIE).
+    //
     // Transmit Interrupt Enable for TDRE
-    // 0 - Hardware interrupts from TDRE disabled; use polling.
-    // 1 - Hardware interrupt requested when TDRE flag is 1.
-    UART0->C2 |= UART0_C2_TIE(1);
+    // TIE 0 - TDRE interrupt requests disabled (i.e. use polling).
+    // TIE 1 - TDRE interrupt request enabled.
+    //
+    // TDRE (Transmit Data Register Empty) (set in UART_S1).
+    // TDRE 0: Shift register is loaded	and	shifting. An additional byte is waiting
+    // in the data register.
+    // TDRE 1: Data register empty and ready for next byte.
+//    UART0->C2 |= UART0_C2_TIE(1);
 
-    // First disable/clear the interrupt for UART0 (IRQ #12 = bit 12 of ICER[0]
-    // = 0x1000).
+    // First disable/clear the interrupt for UART0 = IRQ #12 = bit 12 of ICER[0]
+    // = 0x1000.
     NVIC_DisableIRQ(UART0_IRQn);
 
-    // Enable the interrupt for UART0 (IRQ #12 = bit 12 of ISER[0] = 0x1000).
+    // Enable the interrupt for UART0 = IRQ #12 = bit 12 of ISER[0] = 0x1000.
     NVIC_EnableIRQ(UART0_IRQn);
 }
 
@@ -173,24 +205,35 @@ void UART0_IRQHandler(void)
 
         // Insert char into app ring.
         insert(ring_rx, c);
+
     }
     // Device transmit char to host uart.
-    else if (uart_can_transmit())
+    if (uart_can_transmit())
     {
     	if (entries(ring_rx) > 0)
     	{
-            // Remove char from app ring.
-    	    char c;
+    		// Remove char from app ring.
+    		char c;
             my_remove(ring_rx, &c);
+
+            // Do an LED test to make sure we are OK up to this point.
+            // Turns light on if any letter except a,b,c,d is typed.
+            /*if ((int)c > 100) { set_led_blue_on(); }
+            else { set_led_blue_off(); }
+            // Add a delay so enough time spent in handler, otherwise an echo to fast.
+            delay(2000);*/
+
+            // Trigger a transmit interrupt.
+            //UART0->C2 |= UART0_C2_TIE(1);
 
             // Transmit char to host uart.
             uart_transmit(c);
+
+            // Clear the transmitter interrupt status so system does not remain
+            // in constant state of interrupt.
+            //UART0->C2 &= ~UART0_C2_TIE(1); // mask = 0x800 = bit 11*/
     	}
     }
-
-    // Clear the transmitter interrupt status so system does not remain
-    // in constant state of interrupt.
-    UART0->C2 &= ~UART0_C2_TIE(1); // mask = 0x800 = bit 11
 
     NVIC_EnableIRQ(UART0_IRQn);
 }
