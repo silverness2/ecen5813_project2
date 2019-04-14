@@ -12,7 +12,13 @@
  * @date    April 13, 2019
  *
  * NOTES:
- * Project run in the MCUXpresso IDE using SDK_2.x_FRDM_KL25Z version 2.0.0.
+ * - Project run in the MCUXpresso IDE using SDK_2.x_FRDM_KL25Z version 2.0.0.
+ * - Code set to use baud rate 460800.
+ * - On Ubuntu, look for serial ports by listing ports by: ls -l /sys/class/tty*
+ *   (Can unplug and plug device to confirm which is the active serial port for
+ *   the device).
+ * - Can use putty or screen for terminal emulation.
+ * - For example: sudo screen /dev/ttyACM1 460800
  */
 
 #include <stdio.h>
