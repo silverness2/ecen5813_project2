@@ -1,18 +1,20 @@
-/*========================================================================
-** ring_test.c
-** Circular buffer testing
-** ECEN5813
-**========================================================================*/
+/*******************************************************************************
+ *
+ * Copyright (C) 2019 by Shilpi Gupta
+ *
+ ******************************************************************************/
 
 /*
  * @file ring_test.c
  * @brief A program for implementing a ring buffer. Uses CUnit for testing.
  *
  * @author Shilpi Gupta
- * @date March 18, 2019
+ * @date April 13, 2019
+ * @version Project
  *
  * ATTRIBUTIONS
- * Example CUnit code taken from: http://cunit.sourceforge.net/example.html
+ * CUnit code based off of example from:
+ * http://cunit.sourceforge.net/example.html
  */
 
 #include <stdio.h>

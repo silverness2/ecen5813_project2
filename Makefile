@@ -1,7 +1,7 @@
 CFLAGS = -Wall -Werror
 LDFLAGS = -lm
 UNIT_LDFLAGS = -lcunit
-TARGET = main
+TARGET = main_ring
 TEST = unit_test
 
 $(TEST): ring_test.o ring.o

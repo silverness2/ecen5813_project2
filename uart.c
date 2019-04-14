@@ -1,10 +1,27 @@
-#include "uart.h"
-#include "led.h"
-#include "MKL25Z4.h"
+/*******************************************************************************
+ *
+ * Copyright (C) 2019 by Shilpi Gupta
+ *
+ ******************************************************************************/
 
 /*
+ * @file    uart.c
+ * @brief   Library definitions for UART communication on the FRDM KL25Z MCU.
+ * @version Project 2
+ * @date    April 13, 2019
+ * 
+ * Tutorial Attribution:
+ * Freescale ARM Cortex-M Embedded Programming by Muhammad Ali Mazidi et al.
+ */
+
+/*
+IMPORTANT:
+For this code, use a baud rate of 460,800 when setting up the on the host UART.
+
 NOTES:
-"We monitor poll) the TC flag bit to make sure that all the bits of the
+From "Freescale ARM Cortex-M Embedded Programming" by Muhammad Ali Mazidi et al.
+
+"We monitor (poll) the TC flag bit to make sure that all the bits of the
 last byte are transmitted. By the same logic, we monitor (poll) the RDRF
 flag to see if a byte of data is received. The transmitter is double buffered.
 While the shift register is shifting the last byte out, the program may
@@ -13,27 +30,52 @@ register to be ready. The transfer of data between the data register and
 the shift register is automatic and the program does not have to worry
 about it."
 
-TCIE (Transmission Complete Interrupt Enable) = bit 6 in UART0_C2.
-Used for interrupt-driven UART.
-TCIE 0 = TC Interrupt Request is disabled.
-TCIE 1 = TC Interrupt Request is enabled.
+TCIE (Transmission Complete Interrupt Enable) - Enable the transmitter bit for
+interrupt-driven UART, TIE:
+0 = TC Interrupt Request is disabled.
+1 = TC Interrupt Request is enabled.
 
-Enable the transmitter bit for interrupt-driven UART, TIE (Transmitter Full
-Interrupt Enable) (mask = 0x80 = bit 7 of UART0_C2 = TIE).
+TIE: Transmit Interrupt Enable for TDRE:
+0 - TDRE interrupt requests disabled (i.e. use polling).
+1 - TDRE interrupt request enabled
 
-Transmit Interrupt Enable for TDRE
-TIE 0 - TDRE interrupt requests disabled (i.e. use polling).
-TIE 1 - TDRE interrupt request enabled
+RIE
+0 = RDRF Interrupt Request is disabled.
+1 = RDRF Interrupt Request is enabled.
 
 TDRE (Transmit Data Register Empty) (set in UART_S1).
-TDRE 0: Shift register is loaded and shifting. An additional byte is waiting
-in the data register.
-TDRE 1: Data register empty and ready for next byte.
+0: Shift register is loaded and shifting. An additional byte is waiting
+   in the data register.
+1: Data register empty and ready for next byte.
+
+TC (Transmit Complete) flag (bit 6 = 0x40):
+0 = Transmission in progress (shift reg occupied)
+1 = No transmission in progress (both shift reg and data reg empty)
+
+RDRF (Receive Data Register Full flag (set in UART0_S1):
+0 = No data available in UART data register.
+1 = Data available in UART data register and ready to be picked up.
 */
 
-//#define SIMPLE_ECHO_TEST
-//#define ECHO_TEST
-#define PRINT_TABLE
+#include "uart.h"
+#include "led.h"
+#include "MKL25Z4.h"
+#include <stdio.h> // for sprintf
+
+//#define ECHO_RX_ONLY // echo char with no tx interrupts
+//#define ECHO_RX_TX // echo char with both rx and tx interrupts
+//#define PRINT_TABLE_USE_RX_TX_RING // use a rx ring to store chars received by device uart
+#define PRINT_TABLE_USE_TX_ONLY_RING // don't use an rx ring
+
+#define SHOW_UNIQUE_IN_REPORT
+
+// Define static variables.
+const char *table_title = "\r\nCharacters\r\n";
+const char *unique_title = "\r\n# unique chars: ";
+int ascii[NUM_SYMBOLS];
+int num_unique_chars;
+ring_t *ring_rx;
+ring_t *ring_tx;
 
 void init_ascii_table()
 {
@@ -77,7 +119,7 @@ void uart_init()
     // Turn off UART0 before making configuration changes.
     UART0->C2 = 0; // clear the C2 register (this includes disabling Tx & Rx)
 
-    // Set baud rate for UART0. baud rate = clock rate / ((OSR + 1) * SBR)
+    // Set baud rate for UART0. baud rate = clock rate / ((OSR + 1) * SBR).
     // OSR = 15, SBR = concat of UART0_BDH and UART0_BDL
     // DEFAULT_SYSTEM_CLOCK = 20971520u
     // 460,800 = 20971520 / ((15 + 1) * SBR)
@@ -92,7 +134,7 @@ void uart_init()
     // No parity (bit 1), 8-bit data size and 1 stop bit (bit 4)
     UART0->C1 = 0x00;
 
-    // Enable the transmitter for UART0, TE (Transmit Enable)
+    // Enable the transmitter for UART0, TE (Transmit Enable).
     // Same as: UART0->C2 |= UART0_C2_TE_MASK; // mask = 0x8 = bit 4 is for TE
     UART0->C2 |= UART0_C2_TE(1);
 
@@ -117,13 +159,6 @@ void uart_init_interrupt()
 
     // Enable the receiver bit for interrupt-driven UART, RIE (Receiver Full
     // Interrupt Enable) (mask = 0x20 = bit 5 of UART0_C2 = RIE).
-	//
-	// RIE 0 = RDRF	Interrupt Request is disabled.
-	// RIE 1 = RDRF	Interrupt Request is enabled.
-	//
-	// RDRF (Receive Data Register Full flag (set in UART0_S1).
-	// RDRF 0 = No data available in UART data register.
-	// RDRF 1 = Data available in UART data register and ready to be picked up.
     UART0->C2 |= UART0_C2_RIE(1);
 
     // First disable/clear the interrupt for UART0 = IRQ #12 = bit 12 of ICER[0]
@@ -136,17 +171,8 @@ void uart_init_interrupt()
 
 int uart_can_transmit()
 {
-    /* The TDRE (Transmit Data Register Empty) flag (bit 7 = 0x80):
-       0 = Shift register is loaded and shifting. An additional byte is waiting
-           in the Data Register.
-       1 = The Data Register is empty and ready for the next byte.
-
-       The TC (Transmit Complete) flag (bit 6 = 0x40):
-       0 = Transmission in progress (shift reg occupied)
-       1 = No transmission in progress (both shift reg and data reg empty)
-    */
-
-    // TDRE = 0x80 = bit 7
+    // Check the TDRE (Transmit Data Register Empty) flag (bit 7 = 0x80)
+    // and the TC (Transmit Complete) flag (bit 6 = 0x40).
     if ((UART0->S1 & UART0_S1_TDRE(1)) == 0 ||
         (UART0->S1 & UART0_S1_TC(1)) == 0)
     {
@@ -175,10 +201,7 @@ void uart_transmit_blocking(char c)
 
 int uart_can_receive()
 {
-    // The RDRF (Receive Data Register Full) flag (bit 5):
-    // 0 = No data available in uart data reg.
-    // 1 = Data available in uart data reg and ready to be picked up.
-    // RDRF = 0x20 = bit 5
+    // Check the RDRF (Receive Data Register Full) flag (bit 5 = 0x20).
     if ((UART0->S1 & UART_S1_RDRF(1)) == 0)
     {
         return 0; // no data available
@@ -203,52 +226,73 @@ char uart_receive_blocking()
     return uart_receive();
 }
 
-void populate_tx_table_ring(char c)
+void generate_tx_ring_report()
 {
-	// Increment count for char tc.
-	ascii[(int)c]++;
+    // Insert table title into tx ring.
+    const char *p = table_title;
+    while (*p != '\0')
+    {
+ 	insert(ring_tx, *p);
+	p++;
+    }
 
-	// Insert table title into tx ring.
-	const char *p = table_title;
-	while (*p != '\0')
+    // Insert chars that have a count > 0 into tx ring.
+    for (int i = 0; i < NUM_SYMBOLS; i++)
+    {
+ 	if (ascii[i] != 0)
 	{
-		insert(ring_tx, *p);
-		p++;
-	}
+	    // Get the char string representation of the ascii[i] integer value.
+	    // Ex: If the number of 'a' chars received is 12, we want to
+            // transmit the value 12. sprintf is used to convert the dec = 12
+            // value to a char string, and then the chars '1' and '2' are
+            // inserted into the tx buffer.
+    	    char count_as_char[MAX_COUNT_DIGITS + 1]; // + 1 for '\0' char
+	    int num_digits = sprintf(count_as_char, "%d", ascii[i]);
 
-	// Insert chars that have a count > 0 into tx ring.
-	for (int i = 0; i < NUM_SYMBOLS; i++)
-	{
-		if (ascii[i] != 0)
-		{
-			// Get the char string representation of the ascii[i] integer value.
-			// For ex: If the number of 'a' chars received is 12, we want to transmit
-			// the value 12. So, using sprintf to convert the dec = 12 value to a char
-			// string, and then inserting the chars '1' and '2' into the buffer.
-			char count_as_char[MAX_COUNT_DIGITS + 1]; // +1 for '\0' char
-			int num_digits = sprintf(count_as_char, "%d", ascii[i]);
-
-			// Each line is in the format: char - #
-			// Ex. b - 3
+   	    // Insert the char and its count, formatted.
+	    // Each line is in the format: char - #\r\n (ex. b - 12).
             insert(ring_tx, (char)i); // the char from uart
             insert(ring_tx, ' ');     // a space
             insert(ring_tx, '-');     // a dash
             insert(ring_tx, ' ');     // a space
-            for (int j = 0; j < num_digits; j++) // the char's count
+            for (int j = 0; j < num_digits; j++) // the char count
             {
                 insert(ring_tx, count_as_char[j]);
             }
-            insert(ring_tx, '\r'); //
-            insert(ring_tx, '\n');
-		}
-	}
+            insert(ring_tx, '\r');    // needed for new line
+            insert(ring_tx, '\n');    // new line
+ 	}
+    }
+}
+
+void generate_unique_chars_report()
+{
+    char count_as_char[MAX_COUNT_DIGITS + 1]; // + 1 for '\0' char
+    int num_digits = sprintf(count_as_char, "%d", num_unique_chars);
+
+    // Insert unique chars title into tx ring.
+    // Line is in the format: unique chars: #
+    const char *p = unique_title;
+    while (*p != '\0')
+    {
+ 	insert(ring_tx, *p);
+	p++;
+    }
+    insert(ring_tx, ' ');
+    for (int j = 0; j < num_digits; j++) // the char count
+    {
+    	insert(ring_tx, count_as_char[j]);
+    }
+    insert(ring_tx, '\r');
+    insert(ring_tx, '\n');
 }
 
 void UART0_IRQHandler(void)
 {
+    // Prevent more UART0 interrupts from coming in.
     NVIC_DisableIRQ(UART0_IRQn);
 
-#ifdef SIMPLE_ECHO_TEST
+#ifdef ECHO_RX_ONLY
     // Device receive char from host uart.
     if (uart_can_receive())
     {
@@ -264,18 +308,17 @@ void UART0_IRQHandler(void)
     {
         if (entries(ring_rx) > 0)
     	{
-    		// Remove char from rx ring.
-    		char c;
+      	    // Remove char from rx ring.
+    	    char c;
             my_remove(ring_rx, &c);
 
             // Transmit char to host uart.
             uart_transmit(c);
-
-        } // end if entries > 0
-    } // end if uart can transmit
+        }
+    }
 #endif
 
-#ifdef ECHO_TEST
+#ifdef ECHO_RX_TX
 
     // Device receive char from host uart.
     if (uart_can_receive())
@@ -288,15 +331,14 @@ void UART0_IRQHandler(void)
 
         if (entries(ring_rx) > 0)
     	{
-    		// Remove a char from rx ring.
-    		char tc;
+    	    // Remove a char from rx ring.
+    	    char tc;
             my_remove(ring_rx, &tc);
 
-        	// Add that char to tx ring.
+            // Add that char to tx ring.
             insert(ring_tx, tc);
 
             // Enable transmit interrupts.
-            // TODO: Need to do a check here to see if ok to enable?
             UART0->C2 |= UART0_C2_TIE(1);
     	}
     }
@@ -305,20 +347,21 @@ void UART0_IRQHandler(void)
     {
         while (uart_can_transmit() && entries(ring_tx) > 0)
     	{
-    		// Remove char from tx ring.
-    		char tc;
+    	    // Remove char from tx ring.
+    	    char tc;
             my_remove(ring_tx, &tc);
 
             // Transmit char to host uart.
             uart_transmit(tc);
         }
 
-        // Disable transmit interrupts so not constantly entering the interrupt handler.
+        // Disable transmit interrupts so not constantly entering the interrupt
+        // handler.
         UART0->C2 &= ~UART_C2_TIE(1);
     }
 #endif
 
-#ifdef PRINT_TABLE_WITH_TIE
+#ifdef PRINT_TABLE_USE_RX_TX_RING
 
     // Device receive char from host uart.
     if (uart_can_receive())
@@ -327,23 +370,25 @@ void UART0_IRQHandler(void)
     	char rc = uart_receive();
 
     	// Insert char into rx ring.
-    	insert(ring_rx, rc);
+    	int ret = insert(ring_rx, rc);
 
-        if (entries(ring_rx) > 0)
+        if (ret && entries(ring_rx) > 0)
     	{
-    		// Remove a char from rx ring.
-    		char tc;
+    	    // Remove a char from rx ring.
+    	    char tc;
             int ret = my_remove(ring_rx, &tc);
 
-        	if (ret)
+            if (ret)
             {
-            	// Add char to tx ring. Tx ring is formatted as a table.
-            	populate_tx_table_ring(tc);
-            }
+            	// Increment count for char tc.
+            	ascii[(int)rc]++;
 
-            // Enable transmit interrupts.
-            // TODO: Need to do a check here to see if ok to enable?
-            UART0->C2 |= UART0_C2_TIE(1);
+            	// Add char to tx ring. The tx ring is formatted as a table.
+            	generate_tx_ring_report();
+
+                // Enable transmit interrupts.
+                UART0->C2 |= UART0_C2_TIE(1);
+            }
     	}
     }
     // Device transmit char to host uart.
@@ -361,10 +406,55 @@ void UART0_IRQHandler(void)
             }
         }
 
-        // Disable transmit interrupts so not constantly entering the interrupt handler.
+        // Disable transmit interrupts so not constantly entering the interrupt
+        // handler.
         UART0->C2 &= ~UART_C2_TIE(1);
     }
 #endif
+
+#ifdef PRINT_TABLE_USE_TX_ONLY_RING
+
+    // Device receive char from host uart.
+    if (uart_can_receive())
+    {
+        // Get char from device uart.
+    	char rc = uart_receive();
+
+    	// Increment count for received char rc.
+    	ascii[(int)rc]++;
+
+        // Generate a report. The tx ring contains a count of received chars and
+    	// is formatted as a simple table.
+    	generate_tx_ring_report();
+
+#ifdef SHOW_UNIQUE_IN_REPORT
+    	// Report the number of unique chars received.
+        generate_unique_chars_report();
+#endif
+
+        // Enable transmit interrupts.
+        UART0->C2 |= UART0_C2_TIE(1);
+    }
+    // Device transmit char to host uart. TCIE 1 means TC is interrupt enabled.
+    else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
+    {
+        // Transmit tx ring table to host UART from device UART.
+        while (entries(ring_tx) > 0)
+        {
+            // Remove char from the tx ring.
+            char tc;
+            int ret = my_remove(ring_tx, &tc);
+            if (ret && uart_can_transmit())
+            {
+                uart_transmit(tc);
+            }
+        }
+
+        // Disable transmit interrupts so not constantly entering the interrupt
+        // handler.
+        UART0->C2 &= ~UART_C2_TIE(1);
+    }
+#endif
+    // Renable UART0 interrupts.
     NVIC_EnableIRQ(UART0_IRQn);
 }
-
