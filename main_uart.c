@@ -8,14 +8,10 @@
  * @file    main_uart..c
  * @brief   A program for UART communication on the Freedom Freescale (FRDM)
  *          KL25Z Microcontroller (MCU).
- * @version Project 2 - Parts 1 - 5
+ * @version Project 2
  * @date    April 13, 2019
  */
 
-/**
- * @file    test1-project2.c
- * @brief   Application entry point.
- */
 #include <stdio.h>
 #include "board.h"
 #include "peripherals.h"
@@ -34,16 +30,13 @@
 
 void compute_num_unique_chars();
 
-/*
- * @brief   Application entry point.
- */
 int main(void) {
 
-  	/* Init board hardware. */
+    /* Init board hardware. */
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitBootPeripherals();
-  	/* Init FSL debug console. */
+    /* Init FSL debug console. */
     BOARD_InitDebugConsole();
 
 #ifdef TEST_LED
@@ -117,12 +110,12 @@ int main(void) {
 // and when the number is computer.
 void compute_num_unique_chars()
 {
-	num_unique_chars = 0;
-	for (int i = 0; i < NUM_SYMBOLS; i++)
-	{
-		if (ascii[i] != 0)
-		{
+    num_unique_chars = 0;
+    for (int i = 0; i < NUM_SYMBOLS; i++)
+    {
+        if (ascii[i] != 0)
+        {
             num_unique_chars++;
-		}
-	}
+        }
+    }
 }
