@@ -10,6 +10,9 @@
  *          KL25Z Microcontroller (MCU).
  * @version Project 2
  * @date    April 13, 2019
+ *
+ * NOTES:
+ * Project run in the MCUXpresso IDE using SDK_2.x_FRDM_KL25Z version 2.0.0.
  */
 
 #include <stdio.h>
@@ -32,11 +35,12 @@ void compute_num_unique_chars();
 
 int main(void) {
 
-    /* Init board hardware. */
+    // Init board hardware.
     BOARD_InitBootPins();
     BOARD_InitBootClocks();
     BOARD_InitBootPeripherals();
-    /* Init FSL debug console. */
+
+    // Init FSL debug console.
     BOARD_InitDebugConsole();
 
 #ifdef TEST_LED
