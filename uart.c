@@ -87,7 +87,7 @@ void init_ascii_table()
 
 void uart_init_buff()
 {
-    // Initialize ring buffer for receiving chars from host UART.
+    // Initialize ring buffer for receiving chars from host serial terminal.
     ring_rx = init(RING_BUFF_LEN);
 
     // Initialize ring buffer for transmitting chars from device UART.
@@ -186,7 +186,7 @@ int uart_can_transmit()
 
 void uart_transmit(char c)
 {
-    // Transmit char. Writing to this reg starts a transmission from uart.
+    // Transmit char. Writing to this reg starts a transmission from UART.
     UART0->D = c;
 }
 
@@ -293,17 +293,17 @@ void UART0_IRQHandler(void)
     NVIC_DisableIRQ(UART0_IRQn);
 
 #ifdef ECHO_RX_ONLY
-    // Device receive char from host uart.
+    // Device UART receive char from host serial terminal.
     if (uart_can_receive())
     {
-        // Get char from device uart.
+        // Get char from device UART.
     	char c = uart_receive();
 
     	// Insert char into app ring.
     	insert(ring_rx, c);
     }
 
-    // Device transmit char to host uart.
+    // Device UART transmit char to host serial terminal.
     if (uart_can_transmit())
     {
         if (entries(ring_rx) > 0)
@@ -312,7 +312,7 @@ void UART0_IRQHandler(void)
     	    char c;
             my_remove(ring_rx, &c);
 
-            // Transmit char to host uart.
+            // Transmit char to host serial terminal.
             uart_transmit(c);
         }
     }
@@ -320,10 +320,10 @@ void UART0_IRQHandler(void)
 
 #ifdef ECHO_RX_TX
 
-    // Device receive char from host uart.
+    // Device UART receive char from host serial terminal.
     if (uart_can_receive())
     {
-        // Get char from device uart.
+        // Get char from device UART.
     	char rc = uart_receive();
 
     	// Insert char into rx ring.
@@ -342,7 +342,7 @@ void UART0_IRQHandler(void)
             UART0->C2 |= UART0_C2_TIE(1);
     	}
     }
-    // Device transmit char to host uart.
+    // Device UART transmit char to host serial terminal.
     else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
     {
         while (uart_can_transmit() && entries(ring_tx) > 0)
@@ -351,7 +351,7 @@ void UART0_IRQHandler(void)
     	    char tc;
             my_remove(ring_tx, &tc);
 
-            // Transmit char to host uart.
+            // Transmit char to host serial terminal.
             uart_transmit(tc);
         }
 
@@ -363,10 +363,10 @@ void UART0_IRQHandler(void)
 
 #ifdef PRINT_TABLE_USE_RX_TX_RING
 
-    // Device receive char from host uart.
+    // Device UART receive char from host serial terminal.
     if (uart_can_receive())
     {
-        // Get char from device uart.
+        // Get char from device UART.
     	char rc = uart_receive();
 
     	// Insert char into rx ring.
@@ -391,10 +391,10 @@ void UART0_IRQHandler(void)
             }
     	}
     }
-    // Device transmit char to host uart.
+    // Device UART transmit char to host serial terminal.
     else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
     {
-        // Transmit tx ring table to host UART from device UART.
+        // Transmit tx ring table to host serial terminal from device UART.
         while (entries(ring_tx) > 0)
         {
             // Remove char from the tx ring.
@@ -414,10 +414,10 @@ void UART0_IRQHandler(void)
 
 #ifdef PRINT_TABLE_USE_TX_ONLY_RING
 
-    // Device receive char from host uart.
+    // Device UART receive char from host serial terminal.
     if (uart_can_receive())
     {
-        // Get char from device uart.
+        // Get char from device UART.
     	char rc = uart_receive();
 
     	// Increment count for received char rc.
@@ -435,10 +435,10 @@ void UART0_IRQHandler(void)
         // Enable transmit interrupts.
         UART0->C2 |= UART0_C2_TIE(1);
     }
-    // Device transmit char to host uart. TCIE 1 means TC is interrupt enabled.
+    // Device UART transmit char to host serial terminal. TCIE 1 means TC is interrupt enabled.
     else if ((UART0->C2 & UART0_C2_TCIE(1)) == 0)
     {
-        // Transmit tx ring table to host UART from device UART.
+        // Transmit tx ring table to host serial terminal from device UART.
         while (entries(ring_tx) > 0)
         {
             // Remove char from the tx ring.

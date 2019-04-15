@@ -69,10 +69,10 @@ int main(void) {
 
     while (1)
     {
-        // UART on device receives char from UART on host.
+        // UART on device receives char from serial terminal on host.
         char c = uart_receive_blocking();
 
-        // UART on device transmits char back to UART on host.
+        // UART on device transmits char back to serial terminal on host.
         uart_transmit_blocking(c);
     }
 #endif
