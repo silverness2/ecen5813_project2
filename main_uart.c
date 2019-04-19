@@ -116,8 +116,9 @@ int main(void) {
     return 0;
 }
 
-// TODO: BUG: This always reports one char less bc of timing of interrupt
-// and when the number is computer.
+// TODO: BUG: This always reports one char less bc of the timing difference bw
+// when the interrupt processes a received char and when the number of unique
+// chars is computed.
 void compute_num_unique_chars()
 {
     num_unique_chars = 0;

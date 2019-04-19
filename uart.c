@@ -16,7 +16,8 @@
 
 /*
 IMPORTANT:
-For this code, use a baud rate of 460,800 when setting up the on the host UART.
+For this code, use a baud rate of 460,800 when setting up the serial port on the
+host.
 
 NOTES:
 From "Freescale ARM Cortex-M Embedded Programming" by Muhammad Ali Mazidi et al.
