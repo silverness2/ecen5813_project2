@@ -10,8 +10,6 @@
  * @version Project 2
  * @date    April 13, 2019
  * 
- * Tutorial Attribution:
- * Freescale ARM Cortex-M Embedded Programming by Muhammad Ali Mazidi et al.
  */
 
 /*
